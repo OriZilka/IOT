@@ -1,332 +1,123 @@
-# Yarden Rachamim: 204623284
-# Maya Kerem: 204818181
-# Ori Zilka: 312277650
-# https://youtu.be/cjgpjhTNwn4
-
 import RPi.GPIO as GPIO
-from time import sleep
-import random
 import wiringpi
-from mpu6050 import mpu6050
+import random
+from time import sleep
 
+user_pressed = []
+def button_callback(channel):
+    user_pressed.append(channel)
 
-# Green
-greenLED = 18
-gyro_data_perm = 0
-greenFreq = 659
+# declare numbers in matrix for each button
+gpioRedButton = 25
+gpioYellowButton = 6
+gpioGreenButton = 19
+gpioBlueButton = 20
 
-event_happened = False
-# Red
-redBTN = 19
-redLED = 23
-redFreq = 440
+# declare number in matrix for each led
+gpioRedLed = 5
+gpioYellowLed = 13
+gpioGreenLed = 26
+gpioBlueLed = 21
 
-# Blue
-blueBTN = 5
-blueLED = 25
-blueFreq = 784
+# declare number in matrix for mini-speaker
+gpioSpeaker = 12
 
-# Yellow
-yellowFlameSense = 17
-yellowLED = 12
-yellowFreq = 523
+# declare all four leds in an array to randomize between them
+leds = [gpioRedLed, gpioYellowLed, gpioGreenLed, gpioBlueLed]
 
-# Leds list
-ledPIN = [greenLED, redLED, blueLED, yellowLED]
+# declare corresponding sound frequencies for each led
+frequencies = [440, 523, 659, 784]
 
-# Buttons list
-btnPIN = [redBTN, blueBTN]
+# set up BCM GPIO numbering
+GPIO.setwarnings(False)
+GPIO.setmode(GPIO.BCM)
 
-# Buttons list reversed - for game ending needs.
-reverse_ledPIN = [yellowLED, blueLED, redLED, greenLED]
+# set each button as input according to a number in matrix
+GPIO.setup(gpioRedButton, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
+GPIO.setup(gpioYellowButton, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
+GPIO.setup(gpioGreenButton, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
+GPIO.setup(gpioBlueButton, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
 
-# Sound
-soundPIN = 21
-sound_dic = {greenLED: greenFreq,
-             redLED: redFreq,
-             blueLED: blueFreq,
-             yellowLED: yellowFreq}
+# set each LED as output according to a number in matrix
+GPIO.setup(gpioRedLed, GPIO.OUT)
+GPIO.setup(gpioYellowLed, GPIO.OUT)
+GPIO.setup(gpioGreenLed, GPIO.OUT)
+GPIO.setup(gpioBlueLed, GPIO.OUT)
 
-# Speaker sleep time
-sleep_tone = 0.3
+# declare callback function foreach button
+GPIO.add_event_detect(gpioRedButton, GPIO.RISING, callback=button_callback, bouncetime=300)
+GPIO.add_event_detect(gpioYellowButton, GPIO.RISING, callback=button_callback, bouncetime=300)
+GPIO.add_event_detect(gpioGreenButton, GPIO.RISING, callback=button_callback, bouncetime=300)
+GPIO.add_event_detect(gpioBlueButton, GPIO.RISING, callback=button_callback, bouncetime=300)
 
-# Game Global Variables
+# set mini-speaker
+wiringpi.wiringPiSetupGpio()
+wiringpi.softToneCreate(gpioSpeaker)
 
-# Generate a random list
-random_list = []
+try:
+    count = 1
 
-# User actual input
-user_input = []
-
-# User turn status
-turn = 0
-
-# User pressed the right buttons
-next_round = True
-
-# Led sleep time
-sleep_time = 0.6
-
-# Start of main #
-def main():
-    # Global variables names
-    global turn
-    global user_input
-    global next_round
-
-    # User pressed the rigth button
-    is_correct_btn =True
-
-    # Initialize the enviorment
-    set()
-    #add_detection()
-
-    # Game Logic
-    while next_round:
-        # Game Input
-        get_random_value()
-        print(random_list)
-        light_leds()
-
-        # User input
-        while True == user_playing(turn):
-              turn += 1
-              #add_detection()
-              print("turn is = " + (str) (turn))
-
-              # Initialize iff the user have a next turn
-              if turn == len(random_list):
-                  print("Initialize - end of turn")
-                  turn = 0
-                  user_input = []
-                  next_round = True
-                  break
-
-    # Game Over
-    print("Sorry game ended")
-    end_game()
-
-# END OF MAIN #
-
-# One turn
-def user_playing(turn):
-    global next_round
-    global gyro_data_perm
-    global sensor
-    global event_happened
-    global user_input
-
-    # Get user push value
+    # this will carry on until CTRL+C
     while True:
-        if abs(sensor.get_gyro_data().get('y')) > gyro_data_perm + 10:
-            print("green event detected")
-            green_pushed()
-            user_input.append(greenLED)
-            #remove_detection()
+        choices = []
+        user_pressed = []
+
+        # light up leds according to the difficulty
+        for led in range(0, count):
+            # choose random led
+            choice = random.choice(leds)
+            freIndex = leds.index(choice)
+
+            # saving the random choice
+            choices.append(choice)
+
+            # light up led
+            GPIO.output(choice, GPIO.HIGH)
+            wiringpi.softToneWrite(gpioSpeaker, frequencies[freIndex])
+            sleep(0.1)
+            GPIO.output(choice, GPIO.LOW)
+            wiringpi.softToneWrite(gpioSpeaker, 0)
+            sleep(0.4)
+
+        # wait for user input
+        sleep(1 * len(choices))
+
+        # if user didn't press enough buttons in time -> fail
+        if len(choices) != len(user_pressed):
+            print('Tough luck! Please try again...')
             break
 
-        elif event_happened:
-            event_happened = False
+        # if user didn't press the correct order of buttons -> fail
+        isSuccessful = True
+        for index in range(0, len(choices)):
+            if choices[index] == gpioRedLed and user_pressed[index] != gpioRedButton:
+                print('Tough luck! Please try again...')
+                isSuccessful = False
+                break
+
+            if choices[index] == gpioBlueLed and user_pressed[index] != gpioBlueButton:
+                print('Tough luck! Please try again...')
+                isSuccessful = False
+                break
+
+            if choices[index] == gpioYellowLed and user_pressed[index] != gpioYellowButton:
+                print('Tough luck! Please try again...')
+                isSuccessful = False
+                break
+
+            if choices[index] == gpioGreenLed and user_pressed[index] != gpioGreenButton:
+                print('Tough luck! Please try again...')
+                isSuccessful = False
+                break
+
+        if not isSuccessful:
             break
 
-        # elif GPIO.event_detected(redBTN):
-        #     print("red event detected")
-        #     red_pushed()
-        #     user_input.append(redLED)
-        #     remove_detection()
-        #     break
+        # otherwise, continue for another round
+        count = count + 1
+        print('Good job! Get ready for the next round...')
+        sleep(2)
 
-        # elif GPIO.event_detected(blueBTN):
-        #     print("blue event detected")
-        #     blue_pushed()
-        #     user_input.append(blueLED)
-        #     remove_detection()
-        #     break
-
-        # elif GPIO.event_detected(yellowFlameSense):
-        #     print("yellow event detected")
-        #     yellow_pushed()
-        #     user_input.append(yellowLED)
-        #     remove_detection()
-        #     break
-
-    print((str) (user_input) + " = user")
-    print((str) (random_list) + " = random")
-
-    # If user pressed a wrong btn
-    if user_input[turn] != random_list[turn]:
-        print("Sorry wrong button!")
-        next_round = False
-        return False
-
-    # User have next turn
-    return True
-
-# START OF HELPER #
-
-# Remove detection from all buttons
-def remove_detection():
-    # GPIO.remove_event_detect(greenBTN)
-    GPIO.remove_event_detect(redBTN)
-    GPIO.remove_event_detect(blueBTN)
-    GPIO.remove_event_detect(yellowFlameSense)
-
-
-# Add detection to all buttons
-def add_detection():
-    # GPIO.add_event_detect(greenBTN, GPIO.RISING, bouncetime=200)
-    GPIO.add_event_detect(redBTN, GPIO.RISING, bouncetime=200)
-    GPIO.add_event_detect(blueBTN, GPIO.RISING, bouncetime=200)
-    GPIO.add_event_detect(yellowFlameSense, GPIO.BOTH, bouncetime=200)
-
-
-# Light the leds according to random_list values (computer plays!)
-def light_leds():
-   for led in random_list:
-       GPIO.output(led, GPIO.HIGH)
-       led_sound(sound_dic[led])
-       sleep(sleep_time)
-       GPIO.output(led, GPIO.LOW)
-       sleep(sleep_time)
-
-
-# Generate random values(for computer)
-def get_random_value():
-    random_list.append(ledPIN[random.randint(0,3)])
-
-
-# Handeling what to do when button is pushed
-def green_pushed():
-    print("green was pushed")
-    GPIO.output(greenLED, GPIO.HIGH)
-    led_sound(greenFreq)
-    sleep(sleep_time)
-    GPIO.output(greenLED, GPIO.LOW)
-    #sleep(sleep_time)
-
-
-def red_pushed(channel):
-    global event_happened
-    global user_input
-    
-    print("red was pushed")
-    GPIO.output(redLED, GPIO.HIGH)
-    led_sound(redFreq)
-    sleep(sleep_time)
-    GPIO.output(redLED, GPIO.LOW)
-    event_happened = True 
-    user_input.append(redLED)
-
-
-def blue_pushed(channel):
-    global event_happened
-    global user_input
-
-    print("blue was pushed")
-    GPIO.output(blueLED, GPIO.HIGH)
-    led_sound(blueFreq)
-    sleep(sleep_time)
-    GPIO.output(blueLED, GPIO.LOW)
-    event_happened = True 
-    user_input.append(blueBTN)
-
-
-def yellow_pushed(channel):
-    global event_happened
-    global user_input
-    print("Yellow sensed Fire")
-
-    GPIO.output(yellowLED, GPIO.HIGH)
-    led_sound(yellowFreq)
-    sleep(sleep_time)
-    GPIO.output(yellowLED, GPIO.LOW)
-    event_happened = event_happened = True
-    user_input.append(yellowLED)
-    
-
-
-# Excute sound for each led
-def led_sound(freq):
-    wiringpi.softToneWrite(soundPIN, freq)
-    sleep(sleep_tone)
-    wiringpi.softToneWrite(soundPIN, 0)
-
-
-# Set the enviorment
-def set():
-    global gyro_data
-    global sensor
-    GPIO.setwarnings(False)
-    GPIO.setmode(GPIO.BCM)
-
-    # Acc setup
-    sensor = mpu6050(0x68)
-    gyro_data = sensor.get_gyro_data()
-    gyro_data_perm = abs(gyro_data.get('y'))
-
-    # Flame sensor setup
-    GPIO.setup(yellowFlameSense, GPIO.IN)
-
-    # Sound setup
-    wiringpi.wiringPiSetupGpio()
-    wiringpi.softToneCreate(soundPIN)
-
-    # Led setup
-    for pin in ledPIN:
-        GPIO.setup(pin, GPIO.OUT, initial=GPIO.LOW)
-    
-    # Button setup
-    for pin in btnPIN:
-        GPIO.setup(pin, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
-
-    
-    # Add event detections
-    GPIO.add_event_detect(redBTN, GPIO.RISING, bouncetime=300, callback=red_pushed)
-    GPIO.add_event_detect(blueBTN, GPIO.RISING, bouncetime=300, callback=blue_pushed)
-    GPIO.add_event_detect(yellowFlameSense, GPIO.BOTH, bouncetime=300, callback=yellow_pushed)
-    
-
-
-# All lights on
-def all_leds_sound():
-    GPIO.output(greenLED, GPIO.HIGH)
-    GPIO.output(redLED, GPIO.HIGH)
-    GPIO.output(blueLED, GPIO.HIGH)
-    GPIO.output(yellowLED, GPIO.HIGH)
-    for freq in list(sound_dic.values()):
-        wiringpi.softToneWrite(soundPIN, freq)
-        sleep(0.1)
-    GPIO.output(greenLED, GPIO.LOW)
-    GPIO.output(redLED, GPIO.LOW)
-    GPIO.output(blueLED, GPIO.LOW)
-    GPIO.output(yellowLED, GPIO.LOW)
-    wiringpi.softToneWrite(soundPIN,0)
-
-# Light right to Left
-def right_left_sound(led):
-    GPIO.output(led, GPIO.HIGH)
-    wiringpi.softToneWrite(soundPIN, sound_dic[led])
-    sleep(0.3)
-    GPIO.output(led, GPIO.LOW)
-    wiringpi.softToneWrite(soundPIN, 0)
-
-
-# End of game
-def end_game():
-    # all leds on, all sound on
-    all_leds_sound()
-
-    # right to left
-    for led in ledPIN:
-        right_left_sound(led)
-    for led in reverse_ledPIN:
-        right_left_sound(led)
-
-
-#END OF HELPER
-
-
-
-
-if __name__ == "__main__":
-    main()
+# run when program is finished (CTRL+C)
+finally:
+    GPIO.cleanup()
